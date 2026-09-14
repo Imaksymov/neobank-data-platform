@@ -1,0 +1,11 @@
+[sqlfluff]
+dialect = postgres
+templater = jinja
+max_line_length = 120
+exclude_rules = LT05, ST06
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.identifiers]
+extended_capitalisation_policy = lower
