@@ -7,7 +7,10 @@
 
 -- Один truncate на все таблицы сразу: взаимные FK при этом не мешают,
 -- тогда как восемь отдельных пришлось бы упорядочивать вручную.
-truncate table berka.trans, berka."order", berka.loan, berka.card, berka.disp, berka.account, berka.client, berka.district;
+-- client_pii включена, хотя заполняется не здесь, а generate_pii.py:
+-- она ссылается на client внешним ключом, и без неё Postgres откажется
+-- усекать client вообще.
+truncate table berka.trans, berka."order", berka.loan, berka.card, berka.disp, berka.account, berka.client_pii, berka.client, berka.district;
 
 -- Даты в источнике — YYMMDD. Век задаём явной склейкой '19' || ...,
 -- а не маской 'YYMMDD': Postgres трактует YY 00-69 как 2000-е, 70-99
