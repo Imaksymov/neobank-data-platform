@@ -25,28 +25,34 @@ for f in district client account disp card loan order trans; do
     [ -f "${RAW_DIR}/${f}.csv" ] || { echo "Нет файла ${RAW_DIR}/${f}.csv" >&2; exit 1; }
 done
 
-echo "1/3 landing-таблицы"
+echo "1/4 landing-таблицы"
 psql_run < "${SQL_DIR}/01_landing.sql"
 
-echo "2/3 \\copy файлов"
+echo "2/4 \\copy файлов"
 for f in district client account disp card loan order trans; do
     printf '  %-9s' "$f"
     psql_run -c "\\copy berka_landing.\"${f}\" from stdin with (format csv, header true, delimiter ';')" \
         < "${RAW_DIR}/${f}.csv"
 done
 
-echo "3/3 преобразование в типизированный источник"
+echo "3/4 преобразование в типизированный источник"
 psql_run < "${SQL_DIR}/02_transform.sql"
+
+# PII генерируются после клиентов: генератор читает client_id,
+# birth_number и район из уже загруженных таблиц.
+echo "4/4 синтетические PII"
+(cd "$REPO_ROOT" && uv run python ingestion/berka/generate_pii.py)
 
 echo
 echo "Строк загружено:"
 psql_run -c "
 select 'district' as tbl, count(*) from berka.district
-union all select 'client',  count(*) from berka.client
-union all select 'account', count(*) from berka.account
-union all select 'disp',    count(*) from berka.disp
-union all select 'card',    count(*) from berka.card
-union all select 'loan',    count(*) from berka.loan
-union all select 'order',   count(*) from berka.\"order\"
-union all select 'trans',   count(*) from berka.trans;
+union all select 'client',     count(*) from berka.client
+union all select 'client_pii', count(*) from berka.client_pii
+union all select 'account',    count(*) from berka.account
+union all select 'disp',       count(*) from berka.disp
+union all select 'card',       count(*) from berka.card
+union all select 'loan',       count(*) from berka.loan
+union all select 'order',      count(*) from berka.\"order\"
+union all select 'trans',      count(*) from berka.trans;
 "
