@@ -15,6 +15,13 @@ truncate table berka.trans, berka."order", berka.loan, berka.card, berka.disp, b
 -- сработала бы верно, но правило зависит от данных, а не от схемы:
 -- тот же birth_number с годами 11-69 она молча отправила бы в 2011-2069.
 -- Явный век не зависит от диапазона вообще.
+--
+-- Поверх разбора даты применяется meta.shift_date() — проекция
+-- 1993-1998 на современные даты. Сдвиг постоянный и кратный 7, поэтому
+-- все интервалы и вся относительная хронология сохраняются, а дни
+-- недели не смещаются. Параметр и обоснование — в meta.date_shift.
+-- Сдвиг применяется при загрузке, а не UPDATE после: так он
+-- идемпотентен по построению и не раздувает таблицу на 1 млн строк.
 
 insert into berka.district
 select
@@ -48,7 +55,7 @@ select
     account_id::int,
     district_id::int,
     frequency,
-    to_date('19' || date, 'YYYYMMDD') as date
+    meta.shift_date(to_date('19' || date, 'YYYYMMDD')) as date
 from berka_landing.account;
 
 insert into berka.disp
@@ -64,14 +71,14 @@ select
     card_id::int,
     disp_id::int,
     type,
-    to_date('19' || left(issued, 6), 'YYYYMMDD') as issued  -- "931107 00:00:00"
+    meta.shift_date(to_date('19' || left(issued, 6), 'YYYYMMDD')) as issued  -- "931107 00:00:00"
 from berka_landing.card;
 
 insert into berka.loan
 select
     loan_id::int,
     account_id::int,
-    to_date('19' || date, 'YYYYMMDD') as date,
+    meta.shift_date(to_date('19' || date, 'YYYYMMDD')) as date,
     amount::numeric,
     duration::int,
     payments::numeric,
@@ -95,7 +102,7 @@ insert into berka.trans
 select
     trans_id::int,
     account_id::int,
-    to_date('19' || date, 'YYYYMMDD') as date,
+    meta.shift_date(to_date('19' || date, 'YYYYMMDD')) as date,
     type,
     nullif(trim(operation), '') as operation,
     amount::numeric,
@@ -104,5 +111,35 @@ select
     nullif(trim(bank), '') as bank,
     nullif(trim(account), '') as account
 from berka_landing.trans;
+
+-- Фиксируем факт применения: что получилось на самом деле, а не что
+-- было задумано. Расхождение shifted_min с source_min + shift_days
+-- означало бы, что сдвиг применён не ко всем колонкам.
+update meta.date_shift
+set
+    shifted_min = (
+        select min(d) from (
+            select min(date) as d from berka.account
+            union all
+            select min(date) from berka.loan
+            union all
+            select min(issued) from berka.card
+            union all
+            select min(date) from berka.trans
+        ) as s
+    ),
+    shifted_max = (
+        select max(d) from (
+            select max(date) as d from berka.account
+            union all
+            select max(date) from berka.loan
+            union all
+            select max(issued) from berka.card
+            union all
+            select max(date) from berka.trans
+        ) as s
+    ),
+    applied_at = now()
+where source_name = 'berka';
 
 drop schema berka_landing cascade;
