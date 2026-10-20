@@ -9,3 +9,10 @@ capitalisation_policy = lower
 
 [sqlfluff:rules:capitalisation.identifiers]
 extended_capitalisation_policy = lower
+
+# RF04 запрещает ключевые слова в именах. Слой источника (berka) обязан
+# зеркалить чужую схему, а там есть date, type, operation, account, order.
+# Разрешаем именно эти слова, а не отключаем правило: новый код,
+# использующий любое другое ключевое слово, по-прежнему будет помечен.
+[sqlfluff:rules:references.keywords]
+ignore_words = date,type,operation,account,order
