@@ -17,11 +17,27 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
+  # mypy локальным хуком, а не через mirrors-mypy.
+  #
+  # Причина: хуки pre-commit работают в изолированных окружениях, где нет
+  # зависимостей проекта. mirrors-mypy решает это тем, что по умолчанию
+  # передаёт --ignore-missing-imports, и тогда все сторонние импорты
+  # (httpx, psycopg, faker) становятся Any. Хук при этом зелёный, а
+  # strict = true обессмысливается именно там, где нужен больше всего —
+  # на вызовах в чужие библиотеки.
+  #
+  # language: system запускает mypy из окружения проекта, где зависимости
+  # настоящие. Требует uv на машине — он и так нужен для make lint.
+  - repo: local
     hooks:
       - id: mypy
-        additional_dependencies: [pydantic, types-requests]
+        name: mypy (окружение проекта)
+        entry: uv run mypy
+        language: system
+        types_or: [python, pyi]
+        args: ["."]
+        pass_filenames: false
+        require_serial: true
 
   - repo: https://github.com/sqlfluff/sqlfluff
     rev: 3.2.5
