@@ -16,19 +16,37 @@ jobs:
         with:
           enable-cache: true
 
+      # Без аргумента версия берётся из .python-version — единственный
+      # источник истины, общий с локальным окружением.
       - name: Set up Python
-        run: uv python install 3.12
+        run: uv python install
 
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Lint
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      - name: Type check
-        run: uv run mypy .
+      # Один прогон pre-commit вместо отдельных шагов ruff/mypy.
+      # Так определение проверок живёт в одном месте: что срабатывает
+      # локально на коммите, то же выполняется и в CI. Отдельные шаги
+      # означали бы два конфига, которые однажды разойдутся — и
+      # разойдутся незаметно.
+      #
+      # Здесь же появился sqlfluff: до этого SQL в CI не проверялся
+      # вообще, и PR, состоящий почти целиком из SQL, получал зелёную
+      # галочку, не посмотрев ни строчки SQL.
+      - name: Lint and type check
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
+      # Синтаксис compose. Ловит опечатки и нарушения схемы, но не
+      # смысловые ошибки: пропущенный name:, из-за которого проекты
+      # делили тома (AF-001), эта проверка не поймала бы.
+      - name: Validate docker compose
+        run: docker compose -f infra/docker-compose.yml config --quiet
 
       - name: Tests
         run: uv run pytest
