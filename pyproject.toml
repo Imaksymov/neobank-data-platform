@@ -14,6 +14,20 @@ dependencies = [
     "tenacity>=9.0",
 ]
 
+# Собираемый пакет, а не «виртуальный» проект. Без build-system uv ставит
+# зависимости, но сам пакет ingestion в .venv не устанавливает, и он
+# импортируется только при запуске из корня репозитория: pytest падал с
+# ModuleNotFoundError ещё на сборе тестов. Плюс точке входа CLI недели 4
+# ([project.scripts]) нужен собираемый пакет.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Имя проекта neobank-data-platform, и по умолчанию hatchling искал бы
+# пакет neobank_data_platform. Собираем только ingestion.
+[tool.hatch.build.targets.wheel]
+packages = ["ingestion"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",
@@ -22,6 +36,7 @@ dev = [
     "ruff>=0.6",
     "pre-commit>=3.8",
     "faker>=40.43.0",
+    "pyarrow-stubs>=20.0.0.20260819",
 ]
 
 [tool.ruff]
@@ -41,6 +56,17 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 python_version = "3.12"
 strict = true
 warn_unreachable = true
+# Без плагина mypy понимает pydantic только через dataclass_transform и не
+# видит служебных параметров BaseSettings (_env_file). Плагин поставляется
+# вместе с pydantic, отдельной зависимости не требует.
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+# Типизированный __init__ и запрет лишних аргументов: опечатка в имени
+# поля ловится статически, а не только в рантайме через extra="forbid".
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 [tool.pytest.ini_options]
 addopts = "-q --cov=ingestion --cov-report=term-missing"
